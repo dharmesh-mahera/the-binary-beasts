@@ -1,5 +1,6 @@
 import { Component, OnInit } from '@angular/core';
 import { FormBuilder, FormGroup, Validators } from '@angular/forms';
+import { Router } from '@angular/router';
 import { AppService } from 'src/app/app.service';
 
 @Component({
@@ -13,7 +14,7 @@ export class AddEditExpenseComponent implements OnInit {
   maxDate = new Date();  // Get today's date
   isSubmitting: boolean = false; // Flag to show loading spinner
 
-  constructor(private fb: FormBuilder, private expenseService: AppService) {}
+  constructor(private fb: FormBuilder, private expenseService: AppService,private router: Router) {}
 
   ngOnInit(): void {
     this.expenseForm = this.fb.group({
@@ -32,6 +33,7 @@ export class AddEditExpenseComponent implements OnInit {
         next: (response) => {
           console.log('Expense added successfully', response);
           this.isSubmitting = false;  // Hide the loading spinner after submission
+          this.router.navigate(['/expenses']);
           this.expenseForm.reset();
         },
         error: (err) => {
