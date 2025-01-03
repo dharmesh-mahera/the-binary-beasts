@@ -1,12 +1,38 @@
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, session
 from app.database import get_db_connection
 from datetime import datetime
-from pydantic import ValidationError
+from pydantic import ValidationError, BaseModel, EmailStr
 from app.schemas import ExpenseCreate
+from werkzeug.security import check_password_hash, generate_password_hash
+from functools import wraps
+from typing import Optional
 
 bp = Blueprint('api', __name__)
 
+class UserLogin(BaseModel):
+    email: EmailStr
+    password: str
+
+class UserSignup(BaseModel):
+    email: EmailStr
+    first_name: str
+    last_name: Optional[str] = None
+    contact: Optional[str] = None
+    password: str
+
+def login_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if 'user_id' not in session:
+            return jsonify({
+                'error': 'Unauthorized',
+                'message': 'Please login to access this resource'
+            }), 401
+        return f(*args, **kwargs)
+    return decorated_function
+
 @bp.route('users/<int:user_id>/expenses', methods=['POST'])
+@login_required
 def create_expense(user_id):
     try:
         # Validate input data
@@ -17,17 +43,17 @@ def create_expense(user_id):
         conn = get_db_connection()
         try:
             with conn.cursor() as cursor:
-                # Verify category exists and belongs to user
+                # Verify category exists
                 cursor.execute("""
                     SELECT id FROM categories 
-                    WHERE name = %s AND created_by = %s
-                """, (expense_data.category, user_id))
+                    WHERE name = %s
+                """, (expense_data.category))
                 
                 category_result = cursor.fetchone()
                 if not category_result:
                     return jsonify({
                         'error': 'Invalid category',
-                        'message': 'Category not found or does not belong to user'
+                        'message': 'Category not found'
                     }), 400
                 
                 category_id = category_result['id']
@@ -81,6 +107,7 @@ def create_expense(user_id):
         }), 500
 
 @bp.route('users/<int:user_id>/expenses', methods=['GET'])
+@login_required
 def list_expenses(user_id):
     try:
         conn = get_db_connection()
@@ -228,6 +255,7 @@ def list_expenses(user_id):
         }), 500
 
 @bp.route('users/<int:user_id>/expenses/<int:expense_id>', methods=['PUT'])
+@login_required
 def update_expense(user_id, expense_id):
     try:
         # Validate input data
@@ -317,6 +345,7 @@ def update_expense(user_id, expense_id):
         }), 500
 
 @bp.route('users/<int:user_id>/expenses/<int:expense_id>', methods=['DELETE'])
+@login_required
 def delete_expense(user_id, expense_id):
     try:
         conn = get_db_connection()
@@ -357,6 +386,7 @@ def delete_expense(user_id, expense_id):
         }), 500
 
 @bp.route('users/<int:user_id>/expenses/summary', methods=['GET'])
+@login_required
 def get_expense_summary(user_id):
     try:
         # Get optional date range filters from query parameters
@@ -433,6 +463,146 @@ def get_expense_summary(user_id):
         finally:
             conn.close()
             
+    except Exception as e:
+        return jsonify({
+            'error': 'Internal server error',
+            'message': str(e)
+        }), 500
+
+@bp.route('/login', methods=['POST'])
+def login():
+    try:
+        # Validate input data
+        data = request.get_json()
+        login_data = UserLogin(**data)
+        
+        conn = get_db_connection()
+        try:
+            with conn.cursor() as cursor:
+                # Get user by email
+                cursor.execute("""
+                    SELECT id, email, first_name, last_name, contact, password_hash 
+                    FROM user WHERE email = %s
+                """, (login_data.email,))
+                
+                user = cursor.fetchone()
+                
+                if not user or not check_password_hash(user['password_hash'], login_data.password):
+                    return jsonify({
+                        'error': 'Authentication failed',
+                        'message': 'Invalid email or password'
+                    }), 401
+                
+                # Set session data
+                session['user_id'] = user['id']
+                session['email'] = user['email']
+                session['first_name'] = user['first_name']
+                
+                return jsonify({
+                    'message': 'Login successful',
+                    'user': {
+                        'id': user['id'],
+                        'email': user['email'],
+                        'first_name': user['first_name'],
+                        'last_name': user['last_name'],
+                        'contact': user['contact']
+                    }
+                }), 200
+                
+        finally:
+            conn.close()
+            
+    except ValidationError as e:
+        return jsonify({
+            'error': 'Validation error',
+            'details': e.errors()
+        }), 400
+    except Exception as e:
+        return jsonify({
+            'error': 'Internal server error',
+            'message': str(e)
+        }), 500
+
+@bp.route('/logout', methods=['POST'])
+def logout():
+    session.clear()
+    return jsonify({
+        'message': 'Logged out successfully'
+    }), 200
+
+# Example of using the decorator
+@bp.route('/protected-route')
+@login_required
+def protected_route():
+    return jsonify({
+        'message': 'This is a protected route',
+        'user_id': session['user_id']
+    })
+
+@bp.route('/signup', methods=['POST'])
+def signup():
+    try:
+        # Validate input data
+        data = request.get_json()
+        user_data = UserSignup(**data)
+        
+        conn = get_db_connection()
+        try:
+            with conn.cursor() as cursor:
+                # Check if email already exists
+                cursor.execute("""
+                    SELECT id FROM user WHERE email = %s
+                """, (user_data.email,))
+                
+                if cursor.fetchone():
+                    return jsonify({
+                        'error': 'Email already registered',
+                        'message': 'Please use a different email address'
+                    }), 400
+                
+                # Hash the password
+                password_hash = generate_password_hash(user_data.password)
+                
+                # Insert new user
+                cursor.execute("""
+                    INSERT INTO user (email, first_name, last_name, contact, password_hash)
+                    VALUES (%s, %s, %s, %s, %s)
+                """, (
+                    user_data.email,
+                    user_data.first_name,
+                    user_data.last_name,
+                    user_data.contact,
+                    password_hash
+                ))
+                
+                user_id = cursor.lastrowid
+                
+            conn.commit()
+            
+            # Set session data after successful signup
+            session['user_id'] = user_id
+            session['email'] = user_data.email
+            session['first_name'] = user_data.first_name
+            
+            return jsonify({
+                'message': 'User registered successfully',
+                'user': {
+                    'id': user_id,
+                    'email': user_data.email,
+                    'first_name': user_data.first_name,
+                    'last_name': user_data.last_name,
+                    'contact': user_data.contact
+                }
+            }), 201
+            
+        finally:
+            conn.close()
+            
+    except ValidationError as e:
+        return jsonify({
+            'error': 'Validation error',
+            'details': e.errors()
+        }), 400
     except Exception as e:
         return jsonify({
             'error': 'Internal server error',
