@@ -11,7 +11,7 @@ import { Router } from '@angular/router';
   styleUrls: ['./list.component.scss']
 })
 export class ListExpensesComponent implements OnInit, AfterViewInit {
-  displayedColumns: string[] = ['id', 'amount', 'date', 'category', 'description', 'created_at', 'actions'];
+  displayedColumns: string[] = ['amount', 'category', 'description', 'created_at', 'actions'];
   dataSource = new MatTableDataSource<any>([]);
   @ViewChild(MatPaginator) paginator: MatPaginator | undefined;
 
@@ -19,11 +19,16 @@ export class ListExpensesComponent implements OnInit, AfterViewInit {
 
   ngOnInit(): void {
     // Fetch expenses from the API
-    this.appService.getExpenses().subscribe((data: ExpenseApiResponse) => {
-      console.log(data);
-      this.dataSource.data = data.expenses;
-    });
+  this.getExpenses();
     
+  }
+
+
+  getExpenses() {
+    this.appService.getExpenses().subscribe((data: ExpenseApiResponse) => {
+      this.dataSource.data = data.expenses;
+      this.appService.expenses = data.expenses;
+    });
   }
 
   ngAfterViewInit(): void {
@@ -43,6 +48,9 @@ export class ListExpensesComponent implements OnInit, AfterViewInit {
   }
 
   deleteExpense(expense: Expense): void {
+    this.appService.deleteExpenses(expense.id).subscribe((res) => {
+      this.getExpenses();
+    })
     // This function would delete an expense
   }
 }

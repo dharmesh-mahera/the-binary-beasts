@@ -9,7 +9,7 @@ import { Expense, ExpenseApiResponse } from './app.types';
 })
 export class AppService {
     private expenseApiUrl = `${environment.apiBaseUrl}/api/users/1/expenses`; // Replace with your actual API URL
-
+    expenses: any
     constructor(private http: HttpClient) { }
 
     addExpense(expense: Partial<Expense>): Observable<Expense> {
@@ -20,7 +20,17 @@ export class AppService {
         return this.http.post<Expense>(this.expenseApiUrl, expense);
     }
 
+    getExpenseById(id: number) {
+        return this.expenses.find((f: any) => f.id === id);
+      }
+
     getExpenses(): Observable<ExpenseApiResponse> {
         return this.http.get<ExpenseApiResponse>(this.expenseApiUrl);
+    }
+
+
+    
+    deleteExpenses(id: number): Observable<any> {
+        return this.http.delete<any>(`${this.expenseApiUrl}/${id}`);
     }
 }

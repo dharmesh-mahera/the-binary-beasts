@@ -1,6 +1,6 @@
 import { Component, OnInit } from '@angular/core';
 import { FormBuilder, FormGroup, Validators } from '@angular/forms';
-import { Router } from '@angular/router';
+import { ActivatedRoute, Router } from '@angular/router';
 import { AppService } from 'src/app/app.service';
 
 @Component({
@@ -13,8 +13,11 @@ export class AddEditExpenseComponent implements OnInit {
   expenseForm!: FormGroup;
   maxDate = new Date();  // Get today's date
   isSubmitting: boolean = false; // Flag to show loading spinner
+  expenseId: any;
+  isUpdate: boolean = false;
+  expenseData: any
 
-  constructor(private fb: FormBuilder, private expenseService: AppService,private router: Router) {}
+  constructor(private route: ActivatedRoute, private fb: FormBuilder, private expenseService: AppService,private router: Router) {}
 
   ngOnInit(): void {
     this.expenseForm = this.fb.group({
@@ -23,7 +26,19 @@ export class AddEditExpenseComponent implements OnInit {
       category: [null, Validators.required],
       description: ['']
     });
+
+    if(this.route.snapshot.paramMap.get('id')) {
+      this.isUpdate = true;
+      this.expenseId = this.route.snapshot.paramMap.get('id');
+      // this.expenseData =  this.expenseService.getExpenseById(this.expenseId);
+      console.log(this.expenseData);
+      
+    }
+    
+
   }
+
+
 
   onSubmit(): void {
     if (this.expenseForm.valid) {
