@@ -1,0 +1,42 @@
+.container {
+    width: 100%;
+    max-width: 600px;
+    margin: 20px auto;
+  }
+  
+  .expense-form {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+  }
+  
+  .form-field {
+    width: 100%;
+  }
+  
+  mat-card {
+    padding: 20px;
+  }
+  
+  mat-card-header {
+    background-color: #f4f4f4;
+  }
+  
+  mat-card-title {
+    font-weight: bold;
+    font-size: 18px;
+  }
+  
+  mat-card-actions {
+    display: flex;
+    justify-content: flex-end;
+  }
+  
+  button[disabled] {
+    cursor: not-allowed;
+  }
+  
+  .spinner {
+    margin-right: 10px;
+  }
+  

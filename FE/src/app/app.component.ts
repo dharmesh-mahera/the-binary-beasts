@@ -14,15 +14,6 @@ export class AppComponent implements OnInit {
   constructor(private _appService: AppService) { }
 
   ngOnInit() {
-    // Call the service to fetch user details
-    this._appService.getUserDetails().subscribe(
-      (response: any) => {
-        this.status = response.status;
-        this.userData = response.user;
-      },
-      error => {
-        console.error('Error fetching user data:', error);
-      }
-    );
+  
   }
 }
