@@ -189,9 +189,12 @@ def list_expenses(user_id):
                 
                 # Format response data
                 for expense in expenses:
-                    expense['created_at'] = expense['created_at'].isoformat()
+                    # expense['created_at'] = expense['created_at'].isoformat()
+                    expense['date'] = expense['created_at'].isoformat()
                     expense['modified_at'] = expense['modified_at'].isoformat()
                     expense['amount'] = float(expense['amount'])
+                    del expense['created_at']
+
                 
                 return jsonify({
                     'expenses': expenses,
@@ -319,16 +322,23 @@ def delete_expense(user_id, expense_id):
         conn = get_db_connection()
         try:
             with conn.cursor() as cursor:
-                # Check if expense exists
-                cursor.execute("SELECT * FROM expenses WHERE id = %s", (expense_id,))
+                # Check if expense exists and belongs to user
+                cursor.execute("""
+                    SELECT * FROM expenses 
+                    WHERE id = %s AND user_id = %s
+                """, (expense_id, user_id))
+                
                 if not cursor.fetchone():
                     return jsonify({
                         'error': 'Not found',
-                        'message': f'Expense with id {expense_id} not found'
+                        'message': f'Expense with id {expense_id} not found or does not belong to user'
                     }), 404
                 
                 # Delete expense
-                cursor.execute("DELETE FROM expenses WHERE id = %s", (expense_id,))
+                cursor.execute("""
+                    DELETE FROM expenses 
+                    WHERE id = %s AND user_id = %s
+                """, (expense_id, user_id))
                 
             conn.commit()
             
@@ -359,40 +369,45 @@ def get_expense_summary(user_id):
                 # Base query for category summary
                 sql = """
                     SELECT 
-                        category,
+                        c.name as category,
                         COUNT(*) as transaction_count,
-                        SUM(amount) as total_amount,
-                        MIN(amount) as min_amount,
-                        MAX(amount) as max_amount,
-                        AVG(amount) as avg_amount
-                    FROM expenses
-                    WHERE 1=1
+                        SUM(e.amount) as total_amount,
+                        MIN(e.amount) as min_amount,
+                        MAX(e.amount) as max_amount,
+                        AVG(e.amount) as avg_amount
+                    FROM expenses e
+                    JOIN categories c ON e.category_id = c.id
+                    WHERE e.user_id = %s
                 """
-                params = []
+                params = [user_id]
                 
                 # Add date filters if provided
                 if start_date:
-                    sql += " AND date >= %s"
+                    sql += " AND DATE(e.created_at) >= %s"
                     params.append(start_date)
                 if end_date:
-                    sql += " AND date <= %s"
+                    sql += " AND DATE(e.created_at) <= %s"
                     params.append(end_date)
                 
                 # Group by category
-                sql += " GROUP BY category ORDER BY total_amount DESC"
+                sql += " GROUP BY c.name ORDER BY total_amount DESC"
                 
                 cursor.execute(sql, params)
                 category_summary = cursor.fetchall()
                 
                 # Calculate total expenses
-                sql_total = "SELECT SUM(amount) as grand_total FROM expenses WHERE 1=1"
-                total_params = []
+                sql_total = """
+                    SELECT SUM(amount) as grand_total 
+                    FROM expenses 
+                    WHERE user_id = %s
+                """
+                total_params = [user_id]
                 
                 if start_date:
-                    sql_total += " AND date >= %s"
+                    sql_total += " AND DATE(created_at) >= %s"
                     total_params.append(start_date)
                 if end_date:
-                    sql_total += " AND date <= %s"
+                    sql_total += " AND DATE(created_at) <= %s"
                     total_params.append(end_date)
                 
                 cursor.execute(sql_total, total_params)
