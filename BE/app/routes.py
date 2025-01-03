@@ -13,28 +13,46 @@ def create_expense(user_id):
         data = request.get_json()
         expense_data = ExpenseCreate(**data)
         
-        # Convert string date to datetime.date if provided
-        expense_date = datetime.strptime(expense_data.date, '%Y-%m-%d').date() \
-            if expense_data.date else datetime.utcnow().date()
-        
         # Insert into database
         conn = get_db_connection()
         try:
             with conn.cursor() as cursor:
+                # Verify category exists and belongs to user
+                cursor.execute("""
+                    SELECT id FROM categories 
+                    WHERE name = %s AND created_by = %s
+                """, (expense_data.category, user_id))
+                
+                category_result = cursor.fetchone()
+                if not category_result:
+                    return jsonify({
+                        'error': 'Invalid category',
+                        'message': 'Category not found or does not belong to user'
+                    }), 400
+                
+                category_id = category_result['id']
+                
+                # Insert expense
                 sql = """
-                    INSERT INTO expenses (amount, date, description, category)
-                    VALUES (%s, %s, %s, %s)
+                    INSERT INTO expenses (amount, description, user_id, category_id, 
+                                        created_at, modified_at)
+                    VALUES (%s, %s, %s, %s, NOW(3), NOW(3))
                 """
                 cursor.execute(sql, (
                     expense_data.amount,
-                    expense_date,
                     expense_data.description,
-                    expense_data.category
+                    user_id,
+                    category_id
                 ))
                 expense_id = cursor.lastrowid
                 
-                # Fetch the created expense
-                cursor.execute("SELECT * FROM expenses WHERE id = %s", (expense_id,))
+                # Fetch the created expense with category details
+                cursor.execute("""
+                    SELECT e.*, c.name as category 
+                    FROM expenses e
+                    JOIN categories c ON e.category_id = c.id
+                    WHERE e.id = %s
+                """, (expense_id,))
                 created_expense = cursor.fetchone()
                 
             conn.commit()
@@ -43,7 +61,8 @@ def create_expense(user_id):
                 'message': 'Expense added successfully',
                 'expense': {
                     **created_expense,
-                    'date': created_expense['date'].isoformat()
+                    'created_at': created_expense['created_at'].isoformat(),
+                    'modified_at': created_expense['modified_at'].isoformat()
                 }
             }), 201
             
@@ -80,48 +99,76 @@ def list_expenses(user_id):
                 per_page = int(request.args.get('per_page', 10))
                 
                 # Start building the query
-                sql_parts = ["SELECT * FROM expenses WHERE 1=1"]
-                params = []
+                sql_parts = ["""
+                    SELECT e.*, c.name as category 
+                    FROM expenses e
+                    JOIN categories c ON e.category_id = c.id
+                    WHERE e.user_id = %s
+                """]
+                params = [user_id]
+                
+                # Build count query in parallel
+                count_sql_parts = ["""
+                    SELECT COUNT(*) as total 
+                    FROM expenses e
+                    JOIN categories c ON e.category_id = c.id
+                    WHERE e.user_id = %s
+                """]
+                count_params = [user_id]
                 
                 # Full-text search
                 if search_query:
                     # Clean and prepare search query
                     search_terms = ' '.join([f'+{term}*' for term in search_query.split()])
-                    sql_parts.append("""
-                        AND MATCH(description, category) AGAINST (%s IN BOOLEAN MODE)
-                    """)
-                    params.append(search_terms)
+                    search_condition = """
+                        AND (MATCH(e.description) AGAINST (%s IN BOOLEAN MODE)
+                        OR MATCH(c.name) AGAINST (%s IN BOOLEAN MODE))
+                    """
+                    sql_parts.append(search_condition)
+                    count_sql_parts.append(search_condition)
+                    params.extend([search_terms, search_terms])
+                    count_params.extend([search_terms, search_terms])
                 
                 # Apply filters
                 if category:
-                    sql_parts.append("AND category = %s")
+                    sql_parts.append("AND c.name = %s")
+                    count_sql_parts.append("AND c.name = %s")
                     params.append(category)
+                    count_params.append(category)
                 
                 if start_date:
-                    sql_parts.append("AND date >= %s")
+                    sql_parts.append("AND DATE(e.created_at) >= %s")
+                    count_sql_parts.append("AND DATE(e.created_at) >= %s")
                     params.append(start_date)
+                    count_params.append(start_date)
                 
                 if end_date:
-                    sql_parts.append("AND date <= %s")
+                    sql_parts.append("AND DATE(e.created_at) <= %s")
+                    count_sql_parts.append("AND DATE(e.created_at) <= %s")
                     params.append(end_date)
+                    count_params.append(end_date)
                 
                 if min_amount:
-                    sql_parts.append("AND amount >= %s")
+                    sql_parts.append("AND e.amount >= %s")
+                    count_sql_parts.append("AND e.amount >= %s")
                     params.append(float(min_amount))
+                    count_params.append(float(min_amount))
                 
                 if max_amount:
-                    sql_parts.append("AND amount <= %s")
+                    sql_parts.append("AND e.amount <= %s")
+                    count_sql_parts.append("AND e.amount <= %s")
                     params.append(float(max_amount))
+                    count_params.append(float(max_amount))
                 
                 # Add sorting
                 valid_sort_fields = {
-                    'date': 'date',
-                    'amount': 'amount',
-                    'category': 'category',
-                    'created': 'created_at'
+                    'date': 'e.created_at',
+                    'amount': 'e.amount',
+                    'category': 'c.name',
+                    'created': 'e.created_at'
                 }
                 
-                sort_field = valid_sort_fields.get(sort_by, 'date')
+                sort_field = valid_sort_fields.get(sort_by, 'e.created_at')
                 sort_direction = 'DESC' if sort_order.lower() == 'desc' else 'ASC'
                 sql_parts.append(f"ORDER BY {sort_field} {sort_direction}")
                 
@@ -136,40 +183,14 @@ def list_expenses(user_id):
                 expenses = cursor.fetchall()
                 
                 # Get total count for pagination
-                count_sql = f"SELECT COUNT(*) as total FROM expenses WHERE 1=1"
-                count_params = []
-                
-                if search_query:
-                    count_sql += " AND MATCH(description, category) AGAINST (%s IN BOOLEAN MODE)"
-                    count_params.append(search_terms)
-                
-                if category:
-                    count_sql += " AND category = %s"
-                    count_params.append(category)
-                
-                if start_date:
-                    count_sql += " AND date >= %s"
-                    count_params.append(start_date)
-                
-                if end_date:
-                    count_sql += " AND date <= %s"
-                    count_params.append(end_date)
-                
-                if min_amount:
-                    count_sql += " AND amount >= %s"
-                    count_params.append(float(min_amount))
-                
-                if max_amount:
-                    count_sql += " AND amount <= %s"
-                    count_params.append(float(max_amount))
-                
-                cursor.execute(count_sql, count_params)
+                final_count_sql = ' '.join(count_sql_parts)
+                cursor.execute(final_count_sql, count_params)
                 total_count = cursor.fetchone()['total']
                 
                 # Format response data
                 for expense in expenses:
-                    expense['date'] = expense['date'].isoformat()
                     expense['created_at'] = expense['created_at'].isoformat()
+                    expense['modified_at'] = expense['modified_at'].isoformat()
                     expense['amount'] = float(expense['amount'])
                 
                 return jsonify({
@@ -213,34 +234,58 @@ def update_expense(user_id, expense_id):
         conn = get_db_connection()
         try:
             with conn.cursor() as cursor:
-                # Check if expense exists
-                cursor.execute("SELECT * FROM expenses WHERE id = %s", (expense_id,))
+                # Check if expense exists and belongs to user
+                cursor.execute("""
+                    SELECT * FROM expenses 
+                    WHERE id = %s AND user_id = %s
+                """, (expense_id, user_id))
+                
                 if not cursor.fetchone():
                     return jsonify({
                         'error': 'Not found',
-                        'message': f'Expense with id {expense_id} not found'
+                        'message': f'Expense with id {expense_id} not found or does not belong to user'
                     }), 404
+                
+                # Verify category exists and belongs to user
+                cursor.execute("""
+                    SELECT id FROM categories 
+                    WHERE name = %s AND created_by = %s
+                """, (expense_data.category, user_id))
+                
+                category_result = cursor.fetchone()
+                if not category_result:
+                    return jsonify({
+                        'error': 'Invalid category',
+                        'message': 'Category not found or does not belong to user'
+                    }), 400
+                
+                category_id = category_result['id']
                 
                 # Update expense
                 sql = """
                     UPDATE expenses 
-                    SET amount = %s, date = %s, description = %s, category = %s
-                    WHERE id = %s
+                    SET amount = %s, 
+                        description = %s, 
+                        category_id = %s,
+                        modified_at = NOW(3)
+                    WHERE id = %s AND user_id = %s
                 """
-                
-                expense_date = datetime.strptime(expense_data.date, '%Y-%m-%d').date() \
-                    if expense_data.date else datetime.utcnow().date()
                 
                 cursor.execute(sql, (
                     expense_data.amount,
-                    expense_date,
                     expense_data.description,
-                    expense_data.category,
-                    expense_id
+                    category_id,
+                    expense_id,
+                    user_id
                 ))
                 
-                # Fetch updated expense
-                cursor.execute("SELECT * FROM expenses WHERE id = %s", (expense_id,))
+                # Fetch updated expense with category details
+                cursor.execute("""
+                    SELECT e.*, c.name as category 
+                    FROM expenses e
+                    JOIN categories c ON e.category_id = c.id
+                    WHERE e.id = %s
+                """, (expense_id,))
                 updated_expense = cursor.fetchone()
                 
             conn.commit()
@@ -249,8 +294,8 @@ def update_expense(user_id, expense_id):
                 'message': 'Expense updated successfully',
                 'expense': {
                     **updated_expense,
-                    'date': updated_expense['date'].isoformat(),
-                    'created_at': updated_expense['created_at'].isoformat()
+                    'created_at': updated_expense['created_at'].isoformat(),
+                    'modified_at': updated_expense['modified_at'].isoformat()
                 }
             }), 200
             
