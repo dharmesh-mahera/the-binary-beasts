@@ -15,13 +15,14 @@ import { ListExpensesComponent } from './expenses/list/list.component';
 import { AddEditExpenseComponent } from './expenses/add-edit/add-edit.component';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 
-import { ReactiveFormsModule } from '@angular/forms';
+import { FormsModule, ReactiveFormsModule } from '@angular/forms';
 import { MatDatepickerModule } from '@angular/material/datepicker';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatNativeDateModule } from '@angular/material/core';
 import { MatPaginatorModule } from '@angular/material/paginator';
 import { MatTableModule } from '@angular/material/table';
+import { LoginComponent } from './login/login.component';
 
 
 
@@ -30,6 +31,7 @@ import { MatTableModule } from '@angular/material/table';
     AppComponent,
     ListExpensesComponent,
     AddEditExpenseComponent,
+    LoginComponent,
   ],
   imports: [
     BrowserModule,
@@ -47,7 +49,8 @@ import { MatTableModule } from '@angular/material/table';
     MatNativeDateModule, // <-- Import MatNativeDateModule,
     MatProgressSpinnerModule,
     MatPaginatorModule,
-    MatTableModule
+    MatTableModule,
+    FormsModule
   ],
   providers: [],
   bootstrap: [AppComponent]
