@@ -11,7 +11,7 @@ import { Router } from '@angular/router';
   styleUrls: ['./list.component.scss']
 })
 export class ListExpensesComponent implements OnInit, AfterViewInit {
-  displayedColumns: string[] = ['amount', 'category', 'description', 'created_at', 'actions'];
+  displayedColumns: string[] = ['amount', 'category', 'description', 'date', 'actions'];
   dataSource = new MatTableDataSource<any>([]);
   @ViewChild(MatPaginator) paginator: MatPaginator | undefined;
 
