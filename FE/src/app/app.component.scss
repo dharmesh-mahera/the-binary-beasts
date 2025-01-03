@@ -1,0 +1,32 @@
+mat-toolbar {
+    position: sticky;
+    top: 0;
+    z-index: 1000;
+  }
+  
+  .container {
+    margin-top: 20px;
+  }
+  
+  mat-card {
+    margin: 10px 0;
+  }
+  
+  .card {
+    margin: 10px 0;
+  }
+
+
+
+  .container {
+    max-width: 600px;
+    margin: 0 auto;
+    text-align: left;
+  }
+  
+  h1 {
+    text-align: center;
+    margin-bottom: 20px;
+  }
+  
+  
