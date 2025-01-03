@@ -4,6 +4,7 @@ import { MatTableDataSource } from '@angular/material/table';
 import { MatPaginator } from '@angular/material/paginator';
 import { AppService } from 'src/app/app.service';
 import { Router } from '@angular/router';
+import { SnackbarService } from 'src/app/snackbar.service';
 
 @Component({
   selector: 'app-list',
@@ -15,7 +16,7 @@ export class ListExpensesComponent implements OnInit, AfterViewInit {
   dataSource = new MatTableDataSource<any>([]);
   @ViewChild(MatPaginator) paginator: MatPaginator | undefined;
 
-  constructor(private appService: AppService,private router: Router) {}
+  constructor(private appService: AppService,private router: Router, private snackbarService: SnackbarService) {}
 
   ngOnInit(): void {
     // Fetch expenses from the API
@@ -49,8 +50,8 @@ export class ListExpensesComponent implements OnInit, AfterViewInit {
 
   deleteExpense(expense: Expense): void {
     this.appService.deleteExpenses(expense.id).subscribe((res) => {
+      this.snackbarService.openSuccess(res.message);
       this.getExpenses();
     })
-    // This function would delete an expense
   }
 }

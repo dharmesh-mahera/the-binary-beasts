@@ -12,6 +12,9 @@ def create_app():
     # Initialize database
     init_db()
     
+    # Set secret key for sessions
+    app.secret_key = os.getenv('SECRET_KEY', 'your-secret-key-here')  # Make sure to set this in .env
+    
     # Register blueprints
     from app.routes import bp
     app.register_blueprint(bp, url_prefix='/api')

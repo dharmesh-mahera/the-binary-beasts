@@ -14,9 +14,9 @@ export class AppService {
     constructor(private http: HttpClient) { }
 
     addExpense(expense: Partial<Expense>): Observable<Expense> {
-        if (expense.date) {
-            expense.date = expense.date.toISOString().split('T')[0];
-        }
+        // if(expense.date) {
+        //     expense.date = expense.date.toISOString().split('T')[0];
+        // }
 
         return this.http.post<Expense>(this.expenseApiUrl, expense);
     }
@@ -28,6 +28,16 @@ export class AppService {
     getExpenses(): Observable<ExpenseApiResponse> {
         return this.http.get<ExpenseApiResponse>(this.expenseApiUrl);
     }
+
+    updateExpense(expenseId: string, expense: Partial<Expense>): Observable<Expense> {
+        // if(expense.date) {
+        //     expense.date = expense.date.toISOString().split('T')[0];
+        // }
+
+        return this.http.put<Expense>(this.expenseApiUrl + '/' + expenseId, expense);
+    }
+
+
 
     deleteExpenses(id: number): Observable<any> {
         return this.http.delete<any>(`${this.expenseApiUrl}/${id}`);
