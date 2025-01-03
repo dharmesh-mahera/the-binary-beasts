@@ -1,4 +1,10 @@
-from app import app
+from app import create_app
+from flask_cors import CORS
 
-if __name__ == "__main__":
-    app.run(port=3000)
+app = create_app()
+
+# Enable CORS for all routes and origins
+CORS(app, resources={r"/*": {"origins": "*"}})
+
+if __name__ == '__main__':
+    app.run(debug=True)
