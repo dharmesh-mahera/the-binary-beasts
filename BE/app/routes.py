@@ -32,7 +32,6 @@ def login_required(f):
     return decorated_function
 
 @bp.route('users/<int:user_id>/expenses', methods=['POST'])
-@login_required
 def create_expense(user_id):
     try:
         # Validate input data
@@ -107,7 +106,6 @@ def create_expense(user_id):
         }), 500
 
 @bp.route('users/<int:user_id>/expenses', methods=['GET'])
-@login_required
 def list_expenses(user_id):
     try:
         conn = get_db_connection()
@@ -255,7 +253,6 @@ def list_expenses(user_id):
         }), 500
 
 @bp.route('users/<int:user_id>/expenses/<int:expense_id>', methods=['PUT'])
-@login_required
 def update_expense(user_id, expense_id):
     try:
         # Validate input data
@@ -345,7 +342,6 @@ def update_expense(user_id, expense_id):
         }), 500
 
 @bp.route('users/<int:user_id>/expenses/<int:expense_id>', methods=['DELETE'])
-@login_required
 def delete_expense(user_id, expense_id):
     try:
         conn = get_db_connection()
@@ -386,7 +382,6 @@ def delete_expense(user_id, expense_id):
         }), 500
 
 @bp.route('users/<int:user_id>/expenses/summary', methods=['GET'])
-@login_required
 def get_expense_summary(user_id):
     try:
         # Get optional date range filters from query parameters
