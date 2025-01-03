@@ -64,7 +64,7 @@
           <!-- Submit Button with Loading Spinner -->
           <button mat-raised-button color="primary" type="submit" [disabled]="expenseForm.invalid || isSubmitting">
             <mat-spinner *ngIf="isSubmitting" diameter="20" color="primary" class="spinner"></mat-spinner>
-            {{ isSubmitting ? 'Submitting...' : 'Add Expense' }}
+            {{ isSubmitting ? 'Submitting...' : 'Submit' }}
           </button>
         </mat-card-actions>
       </mat-card>
