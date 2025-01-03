@@ -18,7 +18,7 @@ def init_db():
     conn = get_db_connection()
     try:
         with conn.cursor() as cursor:
-            # Create expenses table
+            # Create expenses table with FULLTEXT indexes
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS expenses (
                     id INT AUTO_INCREMENT PRIMARY KEY,
@@ -26,8 +26,11 @@ def init_db():
                     date DATE NOT NULL,
                     description VARCHAR(200),
                     category VARCHAR(50) NOT NULL,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                )
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FULLTEXT KEY ft_description (description),
+                    FULLTEXT KEY ft_category (category),
+                    FULLTEXT KEY ft_combined (description, category)
+                ) ENGINE=InnoDB
             """)
         conn.commit()
     finally:

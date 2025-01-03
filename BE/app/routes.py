@@ -67,37 +67,131 @@ def list_expenses(user_id):
         conn = get_db_connection()
         try:
             with conn.cursor() as cursor:
-                # Add support for optional query parameters
+                # Get search and filter parameters
+                search_query = request.args.get('q')
                 category = request.args.get('category')
                 start_date = request.args.get('start_date')
                 end_date = request.args.get('end_date')
+                min_amount = request.args.get('min_amount')
+                max_amount = request.args.get('max_amount')
+                sort_by = request.args.get('sort_by', 'date')  # default sort by date
+                sort_order = request.args.get('sort_order', 'desc')  # default descending
+                page = int(request.args.get('page', 1))
+                per_page = int(request.args.get('per_page', 10))
                 
-                sql = "SELECT * FROM expenses WHERE 1=1"
+                # Start building the query
+                sql_parts = ["SELECT * FROM expenses WHERE 1=1"]
                 params = []
                 
+                # Full-text search
+                if search_query:
+                    # Clean and prepare search query
+                    search_terms = ' '.join([f'+{term}*' for term in search_query.split()])
+                    sql_parts.append("""
+                        AND MATCH(description, category) AGAINST (%s IN BOOLEAN MODE)
+                    """)
+                    params.append(search_terms)
+                
+                # Apply filters
                 if category:
-                    sql += " AND category = %s"
+                    sql_parts.append("AND category = %s")
                     params.append(category)
+                
                 if start_date:
-                    sql += " AND date >= %s"
+                    sql_parts.append("AND date >= %s")
                     params.append(start_date)
+                
                 if end_date:
-                    sql += " AND date <= %s"
+                    sql_parts.append("AND date <= %s")
                     params.append(end_date)
                 
-                sql += " ORDER BY date DESC"
+                if min_amount:
+                    sql_parts.append("AND amount >= %s")
+                    params.append(float(min_amount))
                 
-                cursor.execute(sql, params)
+                if max_amount:
+                    sql_parts.append("AND amount <= %s")
+                    params.append(float(max_amount))
+                
+                # Add sorting
+                valid_sort_fields = {
+                    'date': 'date',
+                    'amount': 'amount',
+                    'category': 'category',
+                    'created': 'created_at'
+                }
+                
+                sort_field = valid_sort_fields.get(sort_by, 'date')
+                sort_direction = 'DESC' if sort_order.lower() == 'desc' else 'ASC'
+                sql_parts.append(f"ORDER BY {sort_field} {sort_direction}")
+                
+                # Add pagination
+                offset = (page - 1) * per_page
+                sql_parts.append("LIMIT %s OFFSET %s")
+                params.extend([per_page, offset])
+                
+                # Execute main query
+                final_sql = ' '.join(sql_parts)
+                cursor.execute(final_sql, params)
                 expenses = cursor.fetchall()
                 
-                # Convert date objects to ISO format strings
+                # Get total count for pagination
+                count_sql = f"SELECT COUNT(*) as total FROM expenses WHERE 1=1"
+                count_params = []
+                
+                if search_query:
+                    count_sql += " AND MATCH(description, category) AGAINST (%s IN BOOLEAN MODE)"
+                    count_params.append(search_terms)
+                
+                if category:
+                    count_sql += " AND category = %s"
+                    count_params.append(category)
+                
+                if start_date:
+                    count_sql += " AND date >= %s"
+                    count_params.append(start_date)
+                
+                if end_date:
+                    count_sql += " AND date <= %s"
+                    count_params.append(end_date)
+                
+                if min_amount:
+                    count_sql += " AND amount >= %s"
+                    count_params.append(float(min_amount))
+                
+                if max_amount:
+                    count_sql += " AND amount <= %s"
+                    count_params.append(float(max_amount))
+                
+                cursor.execute(count_sql, count_params)
+                total_count = cursor.fetchone()['total']
+                
+                # Format response data
                 for expense in expenses:
                     expense['date'] = expense['date'].isoformat()
                     expense['created_at'] = expense['created_at'].isoformat()
+                    expense['amount'] = float(expense['amount'])
                 
                 return jsonify({
                     'expenses': expenses,
-                    'total': len(expenses)
+                    'pagination': {
+                        'current_page': page,
+                        'per_page': per_page,
+                        'total_items': total_count,
+                        'total_pages': (total_count + per_page - 1) // per_page
+                    },
+                    'filters': {
+                        'search_query': search_query,
+                        'category': category,
+                        'date_range': {
+                            'start': start_date,
+                            'end': end_date
+                        },
+                        'amount_range': {
+                            'min': min_amount,
+                            'max': max_amount
+                        }
+                    }
                 }), 200
                 
         finally:
